@@ -24,9 +24,10 @@ Makefile                               — builds, bundles, and adhoc-signs the 
 
 ## Architecture
 
-- **Read path:** opens `~/Library/Messages/chat.db` directly via the SQLite3 C API (read-only).
-- **Send path:** shells out to `osascript` with an inline AppleScript. Recipient and message are passed as argv, not interpolated.
-- **Transport:** newline-delimited JSON-RPC 2.0 over stdio.
+- **MCPServer class** takes injected `MessageReader` and `MessageSender` protocols. Production uses `SQLiteMessageReader` and `AppleScriptMessageSender`; tests use mocks.
+- **Read path:** `SQLiteMessageReader` opens `~/Library/Messages/chat.db` via the SQLite3 C API (read-only).
+- **Send path:** `AppleScriptMessageSender` shells out to `osascript` with an inline AppleScript. Recipient and message are passed as argv, not interpolated. Validates recipient format (E.164 phone or email) before spawning.
+- **Transport:** newline-delimited JSON-RPC 2.0 over stdio. All responses use `Encodable` types (no `[String: Any]` dictionaries).
 - **TCC:** the `.app` bundle is the FDA subject; child processes inherit access via macOS responsibility chain.
 
 ## Bug tracking
