@@ -12,7 +12,7 @@ ICON       := $(ICON_DIR)/AppIcon.icns
 
 LSREGISTER := /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister
 
-.PHONY: all swift-build clean
+.PHONY: all swift-build test clean
 
 all: $(APP)
 	@echo ""
@@ -27,28 +27,27 @@ all: $(APP)
 	@echo "       $(CURDIR)/$(APP)/Contents/MacOS/$(APP_NAME)"
 
 $(APP): swift-build $(ICON) Resources/Info.plist
-	@echo "==> Assembling $(APP)"
-	@rm -rf $(APP)
-	@mkdir -p $(APP)/Contents/MacOS $(APP)/Contents/Resources
-	@cp "$$(swift build -c release --show-bin-path)/imessage-mcp" $(APP)/Contents/MacOS/$(APP_NAME)
-	@chmod +x $(APP)/Contents/MacOS/$(APP_NAME)
-	@cp $(ICON) $(APP)/Contents/Resources/AppIcon.icns
-	@cp Resources/Info.plist $(APP)/Contents/Info.plist
-	@echo "==> Adhoc signing"
-	@codesign -f -s - --identifier "$(BUNDLE_ID)" $(APP)
-	@-[ -x "$(LSREGISTER)" ] && "$(LSREGISTER)" -f "$(CURDIR)/$(APP)" >/dev/null 2>&1
+	rm -rf $(APP)
+	mkdir -p $(APP)/Contents/MacOS $(APP)/Contents/Resources
+	cp "$$(swift build -c release --show-bin-path)/imessage-mcp" $(APP)/Contents/MacOS/$(APP_NAME)
+	chmod +x $(APP)/Contents/MacOS/$(APP_NAME)
+	cp $(ICON) $(APP)/Contents/Resources/AppIcon.icns
+	cp Resources/Info.plist $(APP)/Contents/Info.plist
+	codesign -f -s - --identifier "$(BUNDLE_ID)" $(APP)
+	-[ -x "$(LSREGISTER)" ] && "$(LSREGISTER)" -f "$(CURDIR)/$(APP)" >/dev/null 2>&1
 
 swift-build:
-	@echo "==> swift build -c release"
-	@swift build -c release
+	swift build -c release
 
 $(ICON): Scripts/make_icon.swift
-	@echo "==> Generating app icon"
-	@mkdir -p $(ICON_DIR)
-	@rm -rf $(ICON_DIR)/AppIcon.iconset
-	@swift Scripts/make_icon.swift $(ICON_DIR)/AppIcon.iconset >/dev/null
-	@iconutil -c icns $(ICON_DIR)/AppIcon.iconset -o $@
+	mkdir -p $(ICON_DIR)
+	rm -rf $(ICON_DIR)/AppIcon.iconset
+	swift Scripts/make_icon.swift $(ICON_DIR)/AppIcon.iconset >/dev/null
+	iconutil -c icns $(ICON_DIR)/AppIcon.iconset -o $@
+
+test:
+	swift test
 
 clean:
-	@rm -rf $(APP) $(BUILD_DIR)
-	@swift package clean 2>/dev/null || true
+	rm -rf $(APP) $(BUILD_DIR)
+	swift package clean 2>/dev/null || true

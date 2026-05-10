@@ -6,6 +6,7 @@ Native macOS MCP server for reading and sending iMessages. Single Swift binary, 
 
 ```bash
 make          # builds release binary, assembles + signs iMessageMCP.app
+make test     # run unit tests
 make clean    # removes .app, .build, swift package artifacts
 ```
 
@@ -18,7 +19,7 @@ Sources/IMMessageMCPLib/Server.swift  — server logic (JSON-RPC transport, SQLi
 Sources/imessage-mcp/main.swift       — entry point (stdin read loop)
 Tests/imessage-mcp-tests/             — unit tests
 Resources/Info.plist                   — app bundle metadata
-Scripts/make_icon.swift                — generates the app icon at build time
+Scripts/make_icon.swift               — generates the app icon at build time
 Makefile                               — builds, bundles, and adhoc-signs the .app
 ```
 
@@ -29,6 +30,10 @@ Makefile                               — builds, bundles, and adhoc-signs the 
 - **Send path:** `AppleScriptMessageSender` shells out to `osascript` with an inline AppleScript. Recipient and message are passed as argv, not interpolated. Validates recipient format (E.164 phone or email) before spawning.
 - **Transport:** newline-delimited JSON-RPC 2.0 over stdio. All responses use `Encodable` types (no `[String: Any]` dictionaries).
 - **TCC:** the `.app` bundle is the FDA subject; child processes inherit access via macOS responsibility chain.
+
+## Makefile conventions
+
+Do not use `@` to suppress command echo in Makefile recipes. Seeing the actual commands is useful for reproducing build steps and debugging.
 
 ## Bug tracking
 
