@@ -3,7 +3,7 @@
 // Speaks JSON-RPC 2.0 (MCP) over stdio (newline-delimited JSON).
 // Reads ~/Library/Messages/chat.db live; sends via Messages.app + osascript.
 //
-// Designed to be packaged as a .app bundle (see install.sh) so macOS TCC
+// Designed to be packaged as a .app bundle (see Makefile) so macOS TCC
 // can grant Full Disk Access at the bundle level. Child processes (osascript)
 // inherit access via macOS's responsibility chain.
 
@@ -12,12 +12,8 @@ import SQLite3
 
 // MARK: - JSON-RPC stdio transport
 
-let stdoutLock = NSLock()
-
 func writeJSON(_ obj: [String: Any]) {
     guard let data = try? JSONSerialization.data(withJSONObject: obj, options: []) else { return }
-    stdoutLock.lock()
-    defer { stdoutLock.unlock() }
     FileHandle.standardOutput.write(data)
     FileHandle.standardOutput.write(Data([0x0A])) // '\n'
 }
@@ -56,6 +52,12 @@ struct IMessageRow {
     let text: String
 }
 
+private let isoFormatter: ISO8601DateFormatter = {
+    let f = ISO8601DateFormatter()
+    f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return f
+}()
+
 func readRecentIMessages(hours: Int, limit: Int) throws -> [IMessageRow] {
     let chatDbPath = (NSHomeDirectory() as NSString)
         .appendingPathComponent("Library/Messages/chat.db")
@@ -70,12 +72,13 @@ func readRecentIMessages(hours: Int, limit: Int) throws -> [IMessageRow] {
     }
     defer { sqlite3_close(db) }
 
-    // Apple's reference date is 2001-01-01 UTC; chat.db stores ns since that.
-    let cutoffSeconds = Date().timeIntervalSinceReferenceDate - Double(hours) * 3600
+    // Apple's reference date is 2001-01-01 UTC.
+    // chat.db stores timestamps in nanoseconds since that date.
+    let cutoffSeconds = Date().timeIntervalSinceReferenceDate - Double(max(hours, 1)) * 3600
     let cutoffNs = Int64(cutoffSeconds * 1_000_000_000)
 
     let sql = """
-    SELECT m.date, m.is_from_me, h.id, c.chat_identifier, c.display_name, COALESCE(m.text, '')
+    SELECT m.date, m.is_from_me, h.id, c.chat_identifier, c.display_name, m.text
     FROM message m
     LEFT JOIN handle h            ON m.handle_id = h.ROWID
     LEFT JOIN chat_message_join j ON m.ROWID    = j.message_id
@@ -94,10 +97,7 @@ func readRecentIMessages(hours: Int, limit: Int) throws -> [IMessageRow] {
     defer { sqlite3_finalize(stmt) }
 
     sqlite3_bind_int64(stmt, 1, cutoffNs)
-    sqlite3_bind_int(stmt, 2, Int32(limit))
-
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    sqlite3_bind_int(stmt, 2, Int32(min(limit, 1000)))
 
     var rows: [IMessageRow] = []
     while sqlite3_step(stmt) == SQLITE_ROW {
@@ -110,7 +110,7 @@ func readRecentIMessages(hours: Int, limit: Int) throws -> [IMessageRow] {
 
         let date = Date(timeIntervalSinceReferenceDate: TimeInterval(dateNs) / 1_000_000_000)
         rows.append(IMessageRow(
-            timestampUtc: formatter.string(from: date),
+            timestampUtc: isoFormatter.string(from: date),
             fromMe: fromMe,
             contact: contact,
             chatIdentifier: chatId,
@@ -143,10 +143,9 @@ func sendIMessage(recipient: String, message: String) throws -> String {
 
     let stdinPipe = Pipe()
     let stderrPipe = Pipe()
-    let stdoutPipe = Pipe()
     proc.standardInput = stdinPipe
     proc.standardError = stderrPipe
-    proc.standardOutput = stdoutPipe
+    proc.standardOutput = FileHandle.nullDevice
 
     try proc.run()
     if let scriptData = script.data(using: .utf8) {
@@ -181,8 +180,8 @@ let TOOLS: [[String: Any]] = [
         "inputSchema": [
             "type": "object",
             "properties": [
-                "hours": ["type": "integer", "default": 24, "description": "How far back to look. Default 24."],
-                "limit": ["type": "integer", "default": 50, "description": "Max messages, newest-first. Default 50."],
+                "hours": ["type": "integer", "default": 24, "description": "How far back to look (1–8760). Default 24."],
+                "limit": ["type": "integer", "default": 50, "description": "Max messages, newest-first (1–1000). Default 50."],
             ],
         ],
     ],
@@ -246,7 +245,10 @@ func handleToolsCall(id: Any?, params: [String: Any]?) {
                 ]
             }
             let json = try JSONSerialization.data(withJSONObject: dicts, options: [.sortedKeys])
-            let text = String(data: json, encoding: .utf8) ?? "[]"
+            guard let text = String(data: json, encoding: .utf8) else {
+                throw NSError(domain: "Encoding", code: 1,
+                              userInfo: [NSLocalizedDescriptionKey: "JSON UTF-8 encoding failed"])
+            }
             writeJSON(successResponse(id: id, result: toolResult(text: text)))
 
         case "send_imessage":
