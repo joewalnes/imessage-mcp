@@ -14,10 +14,12 @@ Requires macOS 13+ and the Swift toolchain (Xcode or Command Line Tools).
 ## Project layout
 
 ```
-Sources/imessage-mcp/main.swift   — entire server (JSON-RPC transport, SQLite queries, AppleScript send)
-Resources/Info.plist              — app bundle metadata
-Scripts/make_icon.swift           — generates the app icon at build time
-Makefile                          — builds, bundles, and adhoc-signs the .app
+Sources/IMMessageMCPLib/Server.swift  — server logic (JSON-RPC transport, SQLite queries, AppleScript send)
+Sources/imessage-mcp/main.swift       — entry point (stdin read loop)
+Tests/imessage-mcp-tests/             — unit tests
+Resources/Info.plist                   — app bundle metadata
+Scripts/make_icon.swift                — generates the app icon at build time
+Makefile                               — builds, bundles, and adhoc-signs the .app
 ```
 
 ## Architecture
@@ -49,11 +51,11 @@ Break work into small atomic commits — one logical change per commit. Don't bu
 
 ## Pre-commit checks
 
-Always build before committing:
+Always build and test before committing:
 ```bash
 swift build    # ensure it compiles
+swift test     # run unit tests
 ```
-This project does not yet have tests or a linter. When tests are added, run them before every commit.
 
 ## Test-first
 
