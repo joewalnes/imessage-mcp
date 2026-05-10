@@ -353,12 +353,15 @@ private let isoFormatter: ISO8601DateFormatter = {
 }()
 
 public final class SQLiteMessageReader: MessageReader {
-    public init() {}
+    private let dbPath: String
+
+    public init(dbPath: String? = nil) {
+        self.dbPath = dbPath ?? (NSHomeDirectory() as NSString)
+            .appendingPathComponent("Library/Messages/chat.db")
+    }
 
     public func readRecent(hours: Int, limit: Int) throws -> [IMessageRow] {
-        let chatDbPath = (NSHomeDirectory() as NSString)
-            .appendingPathComponent("Library/Messages/chat.db")
-        let uri = "file:\(chatDbPath)?mode=ro"
+        let uri = "file:\(dbPath)?mode=ro"
 
         var db: OpaquePointer?
         let flags = SQLITE_OPEN_READONLY | SQLITE_OPEN_URI
